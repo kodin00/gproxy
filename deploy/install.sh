@@ -207,8 +207,29 @@ SERVICE="gui/$uid/com.gproxy.agent"
 info "Starting launchd agent $SERVICE"
 # Boot out the old instance if any; ignore errors (not loaded yet).
 launchctl bootout "$SERVICE" >/dev/null 2>&1 || true
-launchctl bootstrap "gui/$uid" "$PLIST_DST" || die "launchctl bootstrap failed.
-  Check the plist:  plutil -p $PLIST_DST"
+
+# bootout returns before launchd has finished tearing the job down, and a
+# bootstrap during that window fails with "5: Input/output error". Wait for
+# the old job to disappear (up to ~10s), then bootstrap with a few retries.
+i=0
+while launchctl print "$SERVICE" >/dev/null 2>&1 && [ "$i" -lt 20 ]; do
+    sleep 0.5
+    i=$((i + 1))
+done
+
+attempt=1
+until launchctl bootstrap "gui/$uid" "$PLIST_DST" 2>/dev/null; do
+    if [ "$attempt" -ge 5 ]; then
+        # Last try without hiding stderr, so the real reason is shown.
+        launchctl bootstrap "gui/$uid" "$PLIST_DST" || die "launchctl bootstrap failed.
+  Check the plist:  plutil -p $PLIST_DST
+  Check status:     launchctl print $SERVICE"
+        break
+    fi
+    warn "launchctl bootstrap not ready yet (attempt $attempt), retrying..."
+    sleep 1
+    attempt=$((attempt + 1))
+done
 
 info "Agent installed and running (KeepAlive restarts it; starts at login)"
 
