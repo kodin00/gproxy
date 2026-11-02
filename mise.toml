@@ -1,0 +1,39 @@
+# mise owns the toolchain and the dev loop: everything is `mise run <task>`.
+# Run `mise tasks` to list them.
+
+[tools]
+node = "22"
+
+[tasks.deps]
+description = "Install agent dependencies (npm ci; npm install if no lockfile)"
+dir = "agent"
+run = '''
+if [ -f package-lock.json ]; then
+  npm ci
+else
+  npm install
+fi
+'''
+
+[tasks.agent]
+description = "Run the agent in the foreground (Ctrl-C to stop)"
+depends = ["deps"]
+run = "node agent/src/index.js"
+
+[tasks.test]
+description = "Agent smoke test (spawns Chrome + agent on ephemeral ports)"
+alias = "smoke"
+depends = ["deps"]
+run = "node agent/test/smoke.mjs"
+
+[tasks.install]
+description = "Install and start the launchd service (work Mac)"
+run = "./deploy/install.sh"
+
+[tasks.uninstall]
+description = "Stop and remove the launchd service (keeps config + profile)"
+run = "./deploy/uninstall.sh"
+
+[tasks.logs]
+description = "Tail the launchd agent logs"
+run = "tail -F /tmp/gproxy-agent.out.log /tmp/gproxy-agent.err.log"

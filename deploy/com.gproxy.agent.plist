@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gproxy.agent</string>
+
+    <!--
+      Template only. deploy/install.sh substitutes:
+        __NODE_BIN__  -> absolute path to the mise-managed node binary
+        __AGENT_DIR__ -> absolute path to <repo>/agent
+      launchd does NOT expand ~ or $PATH, so install.sh bakes in
+      absolute paths before writing ~/Library/LaunchAgents/.
+    -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE_BIN__</string>
+        <string>__AGENT_DIR__/src/index.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__AGENT_DIR__</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart the agent if it crashes; also starts it at login. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Agent logs one line per event class to stdout; launchd captures it. -->
+    <key>StandardOutPath</key>
+    <string>/tmp/gproxy-agent.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/gproxy-agent.err.log</string>
+</dict>
+</plist>

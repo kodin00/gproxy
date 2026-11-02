@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Logs (agent stdout/stderr go to /tmp/gproxy-agent.*.log; tools may
+# drop *.log in the repo)
+*.log
+
+# macOS
+.DS_Store
+
+# Agent smoke-test scratch space
+agent/test/tmp/
+
+# ---------------------------------------------------------------------------
+# Secrets stay OUT of the repo by design:
+#   ~/.config/gproxy/config.json        — contains the auth token
+#   ~/.local/share/gproxy/chrome-profile — the signed-in work Google session
+# Both live under $HOME, never inside the repo. Do not add local config
+# files or profiles here.
+# ---------------------------------------------------------------------------

@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>gproxy</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #0d0d0f; overflow: hidden;
+    font: 14px/1.5 system-ui, -apple-system, sans-serif;
+    cursor: default;
+  }
+  #screen {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh;
+    display: block; background: #0d0d0f;
+  }
+  #screen:focus { outline: none; }
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    padding: 6px 14px; border-radius: 8px;
+    background: rgba(28, 28, 32, 0.92); border: 1px solid #3a3a42;
+    color: #ececef; font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity 0.15s;
+  }
+  #toast.show { opacity: 1; }
+  #overlay {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(10, 10, 12, 0.55);
+    opacity: 0; pointer-events: none; transition: opacity 0.15s;
+  }
+  #overlay.show { opacity: 1; }
+  #overlay .card { text-align: center; color: #ececef; padding: 0 24px; }
+  #ov-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  #ov-sub { font-size: 13px; color: #a2a2ac; word-break: break-word; }
+  #toolbar {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 2px; padding: 4px;
+    background: rgba(28, 28, 32, 0.92);
+    border: 1px solid #3a3a42; border-radius: 8px;
+    transition: opacity 0.2s;
+  }
+  #toolbar.hidden { opacity: 0; pointer-events: none; }
+  #toolbar button {
+    background: none; border: 0; color: #d8d8dc;
+    font: 15px/1 system-ui, -apple-system, sans-serif;
+    padding: 6px 11px; border-radius: 5px; cursor: pointer;
+  }
+  #toolbar button:hover { background: #45454e; color: #fff; }
+</style>
+</head>
+<body>
+<canvas id="screen" tabindex="0"></canvas>
+
+<div id="toolbar" class="hidden">
+  <button id="btn-back" title="Back (Cmd+[)">&#9003;</button>
+  <button id="btn-forward" title="Forward (Cmd+])">&#8998;</button>
+  <button id="btn-close" title="Close tab on the work Mac">&#10005;</button>
+</div>
+
+<div id="toast"></div>
+
+<div id="overlay" class="show">
+  <div class="card">
+    <div id="ov-title">Loading&hellip;</div>
+    <div id="ov-sub">resolving configuration</div>
+  </div>
+</div>
+
+<script src="viewer.js"></script>
+</body>
+</html>

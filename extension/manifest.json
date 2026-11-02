@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "gproxy",
+  "version": "1.0.0",
+  "description": "View and drive a Chrome tab running on your work Mac, over Tailscale.",
+  "permissions": ["tabs", "storage", "contextMenus"],
+  "host_permissions": ["http://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open on work Mac"
+  },
+  "options_page": "options.html"
+}
