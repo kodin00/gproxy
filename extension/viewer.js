@@ -181,6 +181,7 @@ function connect() {
     retryDelay = BACKOFF_MIN_MS;
     lastRx = Date.now();
     sendHello();
+    if (!document.hidden) sendFocus();
   };
 
   ws.onmessage = function (ev) {
@@ -233,6 +234,17 @@ function send(obj) {
     try { ws.send(JSON.stringify(obj)); } catch (e) { /* socket died mid-send */ }
   }
 }
+
+// The agent's Chrome renders only its front tab; tell it which remote tab
+// is in use whenever this viewer becomes the one being looked at.
+function sendFocus() {
+  send({ t: "focus" });
+}
+
+window.addEventListener("focus", sendFocus);
+document.addEventListener("visibilitychange", function () {
+  if (!document.hidden) sendFocus();
+});
 
 function sendHello() {
   send({ t: "hello", w: Math.floor(window.innerWidth), h: Math.floor(window.innerHeight), dpr: dprClamped() });

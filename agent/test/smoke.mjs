@@ -281,6 +281,23 @@ async function run() {
   assert(tabsAfterPopup.body.tabs.some((t) => t.tabId === popup.tabId), 'popup tab missing from /v1/tabs');
   step(`popup ${popup.tabId} announced and listed`);
 
+  // 6d. Regression: the popup took the front, which hides the original tab
+  // (no frames, dead input). A "focus" from its viewer must bring it back.
+  const visibility = async () => (await pageEval('document.visibilityState')).result.value;
+  await evalUntil(visibility, (v) => v === 'hidden', 5000);
+  assert(await visibility() === 'hidden', 'expected the popup to hide the original tab');
+  const framesBefore = msgs.length;
+  ws.send(JSON.stringify({ t: 'focus' }));
+  await evalUntil(visibility, (v) => v === 'visible', 5000);
+  assert(await visibility() === 'visible', 'focus did not bring the original tab back to front');
+  const resumed = await evalUntil(
+    async () => msgs.slice(framesBefore).some((m) => m.t === 'frame'),
+    (ok) => ok,
+    5000,
+  );
+  assert(resumed, 'no frames after bringing the original tab to front');
+  step('focus brought the original tab back to front; frames resumed');
+
   // 7. Wrong token -> close 4001.
   const badTokenMsgs = [];
   const badWs = await wsCollect(`ws://127.0.0.1:${agentPort}/v1/stream/${tabId}?token=deadbeef`, badTokenMsgs);

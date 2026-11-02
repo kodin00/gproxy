@@ -92,6 +92,7 @@ export class TabRegistry {
     this._bySession = new Map(); // CDP sessionId -> Tab
     this._sweepSeq = 0;
     this._connHandler = null;
+    this.frontTabId = null; // tab we last brought to front; null = unknown
     this.gcTimer = setInterval(() => this._gc(), GC_INTERVAL_MS);
   }
 
@@ -138,6 +139,7 @@ export class TabRegistry {
     if (!this.conn) return; // already cleared (or never connected)
     if (this._connHandler) this.conn.removeListener('event', this._connHandler);
     this.conn = null;
+    this.frontTabId = null;
     this._sweepSeq++;
     this._bySession.clear();
     for (const tab of this.tabs.values()) {
@@ -341,6 +343,7 @@ export class TabRegistry {
   async _activate(tab, ws) {
     if (tab.attaching) await tab.attaching;
     if (tab.viewer !== ws || !this.conn?.open) return;
+    this._bringToFront(tab);
     if (tab.sessionId && !tab.screencast) {
       this._startScreencast(tab).catch((err) => log('cdp-error', `startScreencast: ${err.message}`));
     }
@@ -386,13 +389,19 @@ export class TabRegistry {
       case 'resize':
         this._handleMetrics(tab, msg);
         return;
+      case 'focus':
+        this._bringToFront(tab);
+        return;
       case 'mouse':
+        if (msg.a === 'down' || msg.a === 'wheel') this._bringToFront(tab);
         this._handleMouse(tab, msg);
         return;
       case 'key':
+        if (msg.a === 'down') this._bringToFront(tab);
         this._handleKey(tab, msg);
         return;
       case 'text':
+        this._bringToFront(tab);
         if (typeof msg.text === 'string' && msg.text.length > 0) {
           tab.send('Input.insertText', { text: msg.text })
             .catch((err) => log('cdp-error', `insertText: ${err.message}`));
@@ -724,15 +733,36 @@ export class TabRegistry {
     }
   }
 
+  /**
+   * Chrome only renders the active tab of each window: a background tab is
+   * document.hidden, emits no screencast frames and drops input. A popup or a
+   * new /v1/open tab steals the front, freezing every other viewer — so the
+   * tab a viewer is using (connect, focus, click, key) is brought to front.
+   */
+  _bringToFront(tab) {
+    if (!tab.sessionId || this.frontTabId === tab.targetId) return;
+    this.frontTabId = tab.targetId;
+    tab.send('Page.bringToFront')
+      .then(() => this._sendSyntheticFrame(tab))
+      .catch((err) => {
+        if (this.frontTabId === tab.targetId) this.frontTabId = null;
+        log('cdp-error', `bringToFront ${tab.targetId}: ${err.message}`);
+      });
+  }
+
   _onBrowserEvent(method, params) {
     switch (method) {
       case 'Target.targetDestroyed':
         {
+          // Chrome picks a new front tab on its own; we no longer know which.
+          if (this.frontTabId === params.targetId) this.frontTabId = null;
           const tab = this.tabs.get(params.targetId);
           if (tab) this._drop(tab, 'target destroyed');
         }
         break;
       case 'Target.targetCreated':
+        // A new page (popup or /v1/open) opens in front of whatever we raised.
+        if (params.targetInfo?.type === 'page') this.frontTabId = null;
         if (params.targetInfo?.type === 'page' && !this.tabs.has(params.targetInfo.targetId)) {
           const info = params.targetInfo;
           const opener = info.openerId ? this.tabs.get(info.openerId) : null;

@@ -129,3 +129,90 @@ function setTitle(title) {
     // Cosmetic.
   }
 }
+
+// ---------------------------------------------------------------------------
+// Closing a viewer tab closes its tab on the work Mac.
+//
+// chrome.tabs.onRemoved does not carry the URL, so we keep a map
+// chromeTabId -> agent tabId in chrome.storage.session (survives service
+// worker restarts) and update it from onUpdated. Navigating a viewer tab away
+// from the viewer counts as closing it; a reload does not (URL unchanged).
+// ---------------------------------------------------------------------------
+
+var VIEWER_PREFIX = chrome.runtime.getURL("viewer.html");
+
+function agentTabOf(url) {
+  if (!url || url.indexOf(VIEWER_PREFIX) !== 0) return null;
+  try { return new URL(url).searchParams.get("tab") || null; } catch (e) { return null; }
+}
+
+function loadViewerMap() {
+  return chrome.storage.session.get("viewers").then(function (got) {
+    return got.viewers || {};
+  });
+}
+
+function saveViewerMap(map) {
+  return chrome.storage.session.set({ viewers: map });
+}
+
+// Serialize map updates so concurrent tab events can't clobber each other.
+var mapQueue = Promise.resolve();
+function withViewerMap(fn) {
+  mapQueue = mapQueue.then(function () {
+    return loadViewerMap().then(function (map) {
+      var orphaned = fn(map);
+      return saveViewerMap(map).then(function () {
+        if (orphaned) return closeIfOrphan(orphaned, map);
+      });
+    });
+  }).catch(function (err) {
+    console.error("gproxy: viewer map: " + (err && err.message ? err.message : err));
+  });
+  return mapQueue;
+}
+
+async function closeIfOrphan(agentTab, map) {
+  for (var k in map) if (map[k] === agentTab) return; // still shown elsewhere
+  var c = await getConfig();
+  if (!c.token) return;
+  try {
+    var res = await postJson(c.agentUrl + "/v1/close", { tabId: agentTab }, c.token);
+    if (!res.ok && res.status !== 404) console.error("gproxy: /v1/close HTTP " + res.status);
+  } catch (err) {
+    console.error("gproxy: /v1/close: " + (err && err.message ? err.message : err));
+  }
+}
+
+chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
+  var url = changeInfo.url || (tab && (tab.pendingUrl || tab.url));
+  if (!url) return;
+  var now = agentTabOf(url);
+  withViewerMap(function (map) {
+    var before = map[tabId] || null;
+    if (before === now) return null;
+    if (now) map[tabId] = now; else delete map[tabId];
+    return before; // navigated away from (or to another) viewer
+  });
+});
+
+chrome.tabs.onRemoved.addListener(function (tabId) {
+  withViewerMap(function (map) {
+    var before = map[tabId] || null;
+    delete map[tabId];
+    return before;
+  });
+});
+
+// Rebuild on every service-worker start (covers extension reloads, which
+// clear storage.session, and viewers opened before this code existed).
+chrome.tabs.query({}).then(function (tabs) {
+  withViewerMap(function (map) {
+    for (var k in map) delete map[k];
+    tabs.forEach(function (t) {
+      var a = agentTabOf(t.pendingUrl || t.url);
+      if (a) map[t.id] = a;
+    });
+    return null;
+  });
+});
